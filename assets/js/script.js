@@ -1,7 +1,111 @@
 /* Lakshmi Boys Hostel: accessible gallery and lightweight page interactions. */
 document.addEventListener('DOMContentLoaded', () => {
+  const reviewsTemplate = document.querySelector('#reviewsTemplate');
+  const visitSection = document.querySelector('#visit');
+  if (reviewsTemplate && visitSection) visitSection.before(reviewsTemplate.content.cloneNode(true));
+  const reviewDialog = document.querySelector('#reviewDialog');
+  const reviewForm = document.querySelector('#reviewForm');
+  const reviewGrid = document.querySelector('.review-grid');
+  const reviewAction = document.querySelector('.review-action');
+  const reviewKey = 'lakshmi-boys-hostel-reviews';
+  const settings = window.LBHData?.getSettings();
+  const visitCopy = document.querySelector('.visit-copy');
+  if (settings && visitCopy) {
+    const info = document.createElement('section');
+    info.className = 'stay-info';
+    info.innerHTML = `<span class="stay-info-title">Stay information</span><div class="stay-info-grid"><div class="stay-info-item"><span>Monthly rent</span><b>₹${Number(settings.rent).toLocaleString('en-IN')}</b></div><div class="stay-info-item"><span>Available beds</span><b>${settings.availableBeds} / ${settings.totalBeds}</b></div></div>`;
+    visitCopy.querySelector('.button').before(info);
+  }
+  if (settings) {
+    const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+    const today = settings.menu[todayIndex];
+    const foodMenu = document.createElement('section');
+    foodMenu.className = 'food-menu'; foodMenu.id = 'food-menu';
+    foodMenu.innerHTML = `<div class="wrap"><div class="food-menu-heading"><p class="kicker">Weekly food menu</p><h2>Today’s menu</h2></div><div class="today-meals"><article class="meal-card"><span>Breakfast</span><b>${today[1]}</b></article><article class="meal-card"><span>Lunch</span><b>${today[2]}</b></article><article class="meal-card"><span>Dinner</span><b>${today[3]}</b></article></div><h3 class="weekly-menu-title">Full weekly menu</h3><table class="public-menu-table"><thead><tr><th>Day</th><th>Breakfast</th><th>Lunch</th><th>Dinner</th></tr></thead><tbody>${settings.menu.map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelector('.reviews')?.before(foodMenu);
+  }
+  const makeReviewCard = review => {
+    const card = document.createElement('article');
+    card.className = 'review-card';
+    card.innerHTML = `<div class="review-stars" aria-label="${review.rating} out of 5 stars">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</div><blockquote></blockquote><cite></cite>`;
+    card.querySelector('blockquote').textContent = `“${review.text}”`;
+    card.querySelector('cite').textContent = review.name;
+    return card;
+  };
+  try { (window.LBHData?.getReviews() || JSON.parse(localStorage.getItem(reviewKey) || '[]')).filter(review => review.approved).forEach(review => reviewGrid.append(makeReviewCard(review))); } catch { /* Ignore unavailable local browser storage. */ }
+  const pageSize = 5;
+  let currentPage = 0;
+  const reviewsMore = document.createElement('button');
+  reviewsMore.type = 'button'; reviewsMore.className = 'reviews-more';
+  reviewsMore.setAttribute('aria-expanded', 'false');
+  reviewsMore.innerHTML = 'Show more reviews <span aria-hidden="true">↓</span>';
+  const reviewsUp = document.createElement('button');
+  reviewsUp.type = 'button'; reviewsUp.className = 'reviews-up';
+  reviewsUp.setAttribute('aria-label', 'Go to first reviews');
+  reviewsUp.innerHTML = '⬆';
+  const paginationWrap = document.createElement('div');
+  paginationWrap.className = 'reviews-pagination';
+  paginationWrap.append(reviewsMore, reviewsUp);
+  reviewGrid.insertAdjacentElement('afterend', paginationWrap);
+  const updateReviewVisibility = () => {
+    const cards = [...reviewGrid.querySelectorAll('.review-card')];
+    const total = cards.length;
+    const totalPages = Math.ceil(total / pageSize);
+    cards.forEach((card, index) => {
+      const pageIndex = Math.floor(index / pageSize);
+      card.hidden = pageIndex !== currentPage;
+    });
+    reviewsMore.hidden = total <= pageSize || currentPage >= totalPages - 1;
+    reviewsMore.setAttribute('aria-expanded', currentPage > 0 ? 'true' : 'false');
+    reviewsUp.disabled = currentPage === 0;
+    reviewsUp.hidden = total <= pageSize;
+  };
+  reviewsMore.addEventListener('click', () => {
+    const total = reviewGrid.querySelectorAll('.review-card').length;
+    const totalPages = Math.ceil(total / pageSize);
+    if (currentPage < totalPages - 1) {
+      currentPage += 1;
+      updateReviewVisibility();
+    }
+  });
+  reviewsUp.addEventListener('click', () => {
+    currentPage = 0;
+    updateReviewVisibility();
+    document.querySelector('.reviews')?.scrollIntoView({ behavior: 'smooth' });
+  });
+  updateReviewVisibility();
+  if (reviewAction && reviewDialog) {
+    reviewAction.addEventListener('click', event => {
+      event.preventDefault();
+      reviewDialog.showModal();
+    });
+    reviewDialog.querySelector('.review-close').addEventListener('click', () => reviewDialog.close());
+    reviewDialog.addEventListener('click', event => { if (event.target === reviewDialog) reviewDialog.close(); });
+  }
+  reviewForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = new FormData(reviewForm);
+    const review = { name: data.get('name').trim(), rating: Number(data.get('rating')), text: data.get('review').trim() };
+    if (!review.name || !review.text) return;
+    review.approved = false;
+    try { const saved = window.LBHData?.getReviews() || JSON.parse(localStorage.getItem(reviewKey) || '[]'); saved.push(review); window.LBHData ? window.LBHData.saveReviews(saved) : localStorage.setItem(reviewKey, JSON.stringify(saved)); } catch { /* The submitted review remains available for this visit only. */ }
+    reviewForm.reset();
+    const thanks = reviewDialog.querySelector('.thank-you');
+    thanks.querySelector('p').textContent = 'Your review has been submitted for approval.';
+    thanks.classList.add('show');
+    setTimeout(() => { thanks.classList.remove('show'); reviewDialog.close(); }, 1900);
+  });
+  const locationLink = document.querySelector('.location-line');
+  if (locationLink) {
+    const mapsButton = document.createElement('a');
+    mapsButton.className = 'maps-button';
+    mapsButton.href = 'https://maps.app.goo.gl/xP8VvCCwxHC89f6A7?g_st=aw';
+    mapsButton.target = '_blank'; mapsButton.rel = 'noopener';
+    mapsButton.innerHTML = 'Open in Google Maps <b aria-hidden="true">↗</b>';
+    locationLink.insertAdjacentElement('afterend', mapsButton);
+  }
   const photos = [
-    ['ChatGPT Image Jul 31, 2026, 10_51_21 PM.png', 'Lakshmi Boys Hostel exterior in Tirupati'],
+    ['lakshmi-boys-hostel-hero-corrected.png', 'Lakshmi Boys Hostel exterior in Tirupati'],
     ['ChatGPT Image Jul 31, 2026, 10_51_54 PM.png', 'Lakshmi Boys Hostel building entrance'],
     ['ChatGPT Image Jul 31, 2026, 10_53_41 PM.png', 'Lakshmi Boys Hostel location sign'],
     ['ChatGPT Image Jul 31, 2026, 10_53_56 PM.png', 'Covered resident common area'],
@@ -74,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('shown'); observer.unobserve(entry.target); } }), { threshold: .12 });
   document.querySelectorAll('.reveal').forEach(item => observer.observe(item));
+  window.addEventListener('storage', event => { if (event.key === window.LBHData?.settingsKey || event.key === window.LBHData?.reviewsKey) window.location.reload(); });
   document.querySelector('#year').textContent = new Date().getFullYear();
   window.addEventListener('load', () => document.querySelector('.page-loader').classList.add('done'));
 });
