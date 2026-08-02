@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://lakshmiboyshostel.in/sitemap.xml
+Sitemap: https://lakshmi-boys-hostel.vercel.app/sitemap.xml
